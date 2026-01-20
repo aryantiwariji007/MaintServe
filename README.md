@@ -376,3 +376,38 @@ Available at http://localhost:8000/metrics:
   │ Request Logging   │ ✅         │ ❌          │                                                                                        
   └───────────────────┴────────────┴─────────────┘                                                                                        
   vLLM is intentionally internal-only — all external access goes through MaintServe for security and monitoring.  
+
+
+
+  # 1. download image
+curl -s "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/320px-Cat03.jpg" \
+  -o /tmp/cat.jpg
+
+# 2. base64 encode (mac)
+BASE64_IMG=$(base64 -i /tmp/cat.jpg | tr -d '\n')
+
+# 3. send to MaintServe (Qwen3-VL)
+curl -X POST "http://69.19.137.118/api/v1/chat/completions" \
+  -H "X-API-Key: ms_admin_default_key_change_me" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"Qwen/Qwen3-VL-8B-Instruct\",
+    \"messages\": [
+      {
+        \"role\": \"user\",
+        \"content\": [
+          {
+            \"type\": \"image_url\",
+            \"image_url\": {
+              \"url\": \"data:image/jpeg;base64,${BASE64_IMG}\"
+            }
+          },
+          {
+            \"type\": \"text\",
+            \"text\": \"what is in this image?\"
+          }
+        ]
+      }
+    ],
+    \"max_tokens\": 200
+  }"
