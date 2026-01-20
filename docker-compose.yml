@@ -20,6 +20,25 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # RQ Worker for async jobs
+  worker:
+    build: .
+    command: rq worker inference high --url redis://redis:6379/0
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://maintserve:maintserve@postgres:5432/maintserve
+      - REDIS_URL=redis://redis:6379/0
+      - VLLM_BASE_URL=http://host.docker.internal:8001
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - maintserve-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      replicas: 2  # Run 2 workers by default
+
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
@@ -40,7 +59,7 @@ services:
     networks:
       - maintserve-net
 
-  # Redis for rate limiting
+  # Redis for rate limiting and job queue
   redis:
     image: redis:7-alpine
     ports:

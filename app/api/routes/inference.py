@@ -7,11 +7,92 @@ from app.core.security import get_api_key, get_current_user
 from app.models.api_key import APIKey
 from app.models.user import User
 from app.schemas.inference import ChatCompletionRequest, ChatCompletionResponse
+from app.services.job_queue import enqueue_inference_job, get_job_status, get_queue_stats
 from app.services.rate_limiter import rate_limiter
 from app.services.usage_tracker import UsageTracker
 from app.services.vllm_client import vllm_client
 
 router = APIRouter()
+
+
+# ============== Async Job Endpoints ==============
+
+
+@router.post("/chat/completions/async")
+async def async_chat_completions(
+    request_body: ChatCompletionRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    api_key: APIKey = Depends(get_api_key),
+    user: User = Depends(get_current_user),
+    high_priority: bool = False,
+):
+    """
+    Submit an async chat completion job.
+
+    Returns immediately with a job_id that can be polled for results.
+    Use this for batch processing or when you don't need immediate response.
+    """
+    # Check rate limit
+    is_allowed, rate_info = await rate_limiter.is_allowed(f"user:{user.id}")
+    if not is_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded",
+        )
+
+    # Check quota
+    quota_ok, quota_error = await UsageTracker.check_quota(db, user)
+    if not quota_ok:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=quota_error,
+        )
+
+    # Enqueue the job
+    request_data = request_body.model_dump()
+    request_data["_user_id"] = user.id
+    request_data["_api_key_id"] = api_key.id
+    request_data["_client_ip"] = request.client.host if request.client else None
+
+    job_id = enqueue_inference_job(request_data, high_priority=high_priority)
+
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "status_url": f"/api/v1/jobs/{job_id}",
+        "message": "Job submitted successfully. Poll status_url for results.",
+    }
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(
+    job_id: str,
+    api_key: APIKey = Depends(get_api_key),
+):
+    """
+    Get the status and result of an async job.
+
+    Status values:
+    - queued: Job is waiting in queue
+    - started: Job is being processed
+    - finished: Job completed successfully (result included)
+    - failed: Job failed (error included)
+    - not_found: Job ID doesn't exist
+    """
+    return get_job_status(job_id)
+
+
+@router.get("/queue/stats")
+async def queue_stats(
+    api_key: APIKey = Depends(get_api_key),
+):
+    """
+    Get queue statistics.
+
+    Returns counts for queued, started, finished, and failed jobs.
+    """
+    return get_queue_stats()
 
 
 @router.post("/chat/completions", response_model=ChatCompletionResponse)

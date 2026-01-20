@@ -260,3 +260,62 @@ Available at http://localhost:8000/metrics:
   ? for shortcuts                                                                                                                         
                                                                                                                                           
                                                                                                                                           Base64 encoded images (recommended over URLs) 
+                                                                                                                                        
+● Summary                                                                                                                                 
+                                                                                                                                          
+  What's Implemented                                                                                                                      
+  ┌───────────────────┬────────┬───────────────────────────────────────────────────────┐                                                  
+  │      Feature      │ Status │                        Details                        │                                                  
+  ├───────────────────┼────────┼───────────────────────────────────────────────────────┤                                                  
+  │ 4 Uvicorn Workers │ ✅     │ Handles ~4x more concurrent sync requests             │                                                  
+  ├───────────────────┼────────┼───────────────────────────────────────────────────────┤                                                  
+  │ RQ Job Queue      │ ✅     │ 2 workers processing inference + high priority queues │                                                  
+  ├───────────────────┼────────┼───────────────────────────────────────────────────────┤                                                  
+  │ Async Endpoint    │ ✅     │ POST /api/v1/chat/completions/async                   │                                                  
+  ├───────────────────┼────────┼───────────────────────────────────────────────────────┤                                                  
+  │ Job Status        │ ✅     │ GET /api/v1/jobs/{job_id}                             │                                                  
+  ├───────────────────┼────────┼───────────────────────────────────────────────────────┤                                                  
+  │ Queue Stats       │ ✅     │ GET /api/v1/queue/stats                               │                                                  
+  └───────────────────┴────────┴───────────────────────────────────────────────────────┘                                                  
+  Test Results                                                                                                                            
+                                                                                                                                          
+  Job submitted → queued → started → finished in ~500ms                                                                                   
+  Queue: 1 finished, 0 failed                                                                                                             
+                                                                                                                                          
+  New Architecture                                                                                                                        
+                                                                                                                                          
+                      ┌─────────────────────────┐                                                                                         
+                      │   MaintServe API        │                                                                                         
+                      │   (4 Uvicorn workers)   │                                                                                         
+                      └───────────┬─────────────┘                                                                                         
+                                  │                                                                                                       
+              ┌───────────────────┴───────────────────┐                                                                                   
+              │                                       │                                                                                   
+      Sync requests                           Async requests                                                                              
+              │                                       │                                                                                   
+              ▼                                       ▼                                                                                   
+      ┌───────────────┐                      ┌───────────────┐                                                                            
+      │     vLLM      │                      │  Redis Queue  │                                                                            
+      │   (Direct)    │                      └───────┬───────┘                                                                            
+      └───────────────┘                              │                                                                                    
+                                            ┌────────┴────────┐                                                                           
+                                            ▼                 ▼                                                                           
+                                      ┌──────────┐      ┌──────────┐                                                                      
+                                      │ Worker 1 │      │ Worker 2 │                                                                      
+                                      └─────┬────┘      └─────┬────┘                                                                      
+                                            └────────┬────────┘                                                                           
+                                                     ▼                                                                                    
+                                            ┌───────────────┐                                                                             
+                                            │     vLLM      │                                                                             
+                                            └───────────────┘                                                                             
+                                                                                                                                          
+  When to Use Each                                                                                                                        
+  ┌──────────────────────────────┬───────────────────────────────────────────────┐                                                        
+  │           Endpoint           │                   Use Case                    │                                                        
+  ├──────────────────────────────┼───────────────────────────────────────────────┤                                                        
+  │ POST /chat/completions       │ Real-time responses, interactive chat         │                                                        
+  ├──────────────────────────────┼───────────────────────────────────────────────┤                                                        
+  │ POST /chat/completions/async │ Batch processing, background jobs, long tasks │                                                        
+  └──────────────────────────────┴───────────────────────────────────────────────┘                                                        
+  Want to commit these changes?                                                                                                           
+                                    
