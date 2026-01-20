@@ -316,6 +316,63 @@ Available at http://localhost:8000/metrics:
   │ POST /chat/completions       │ Real-time responses, interactive chat         │                                                        
   ├──────────────────────────────┼───────────────────────────────────────────────┤                                                        
   │ POST /chat/completions/async │ Batch processing, background jobs, long tasks │                                                        
-  └──────────────────────────────┴───────────────────────────────────────────────┘                                                        
-  Want to commit these changes?                                                                                                           
-                                    
+  └──────────────────────────────┴───────────────────────────────────────────────┘                                                                                                                                                                                       
+  Rule 1:                                                                                                                                 
+    Protocol: TCP                                                                                                                         
+    Port: 8000 - 8000                                                                                                                     
+    Source: 0.0.0.0/0                                                                                                                     
+                                                                                                                                          
+  Rule 2:                                                                                                                                 
+    Protocol: TCP                                                                                                                         
+    Port: 443 - 443                                                                                                                       
+    Source: 0.0.0.0/0                                                                                                                     
+                                                                                                                                          
+  Rule 3:                                                                                                                                 
+    Protocol: TCP                                                                                                                         
+    Port: 80 - 80                                                                                                                         
+    Source: 0.0.0.0/0                           
+
+     Request Comparison                                                                                                                      
+  ┌─────────────┬──────────────────────────────────────────────┬───────────────────────────────────────────────┐                          
+  │             │           Via MaintServe (Port 80)           │            Direct vLLM (Port 8001)            │                          
+  ├─────────────┼──────────────────────────────────────────────┼───────────────────────────────────────────────┤                          
+  │ URL         │ http://69.19.137.118/api/v1/chat/completions │ http://69.19.137.118:8001/v1/chat/completions │                          
+  ├─────────────┼──────────────────────────────────────────────┼───────────────────────────────────────────────┤                          
+  │ Status      │ ✅ Works                                     │ ❌ Connection refused                         │                          
+  ├─────────────┼──────────────────────────────────────────────┼───────────────────────────────────────────────┤                          
+  │ Auth Header │ X-API-Key                                    │ Authorization: Bearer                         │                          
+  ├─────────────┼──────────────────────────────────────────────┼───────────────────────────────────────────────┤                          
+  │ Why?        │ Port 80 open, Nginx → MaintServe → vLLM      │ Port 8001 not exposed (internal only)         │                          
+  └─────────────┴──────────────────────────────────────────────┴───────────────────────────────────────────────┘                          
+  Architecture                                                                                                                            
+                                                                                                                                          
+  External (Your Mac)                                                                                                                     
+          │                                                                                                                               
+          ▼                                                                                                                               
+     ┌─────────────────────────────────────────────────┐                                                                                  
+     │              Server (69.19.137.118)             │                                                                                  
+     │                                                 │                                                                                  
+     │   Port 80 ──→ Nginx ──→ MaintServe ──→ vLLM    │                                                                                   
+     │   (open)              (port 8000)   (port 8001) │                                                                                  
+     │                                      ▲          │                                                                                  
+     │                                      │          │                                                                                  
+     │                            localhost only       │                                                                                  
+     │                                                 │                                                                                  
+     │   Port 8001 ✗ (firewall blocks external)       │                                                                                   
+     └─────────────────────────────────────────────────┘                                                                                  
+                                                                                                                                          
+  Why This is Good (Security)                                                                                                             
+  ┌───────────────────┬────────────┬─────────────┐                                                                                        
+  │      Feature      │ MaintServe │ Direct vLLM │                                                                                        
+  ├───────────────────┼────────────┼─────────────┤                                                                                        
+  │ API Key Auth      │ ✅         │ ❌          │                                                                                        
+  ├───────────────────┼────────────┼─────────────┤                                                                                        
+  │ Rate Limiting     │ ✅         │ ❌          │                                                                                        
+  ├───────────────────┼────────────┼─────────────┤                                                                                        
+  │ Usage Tracking    │ ✅         │ ❌          │                                                                                        
+  ├───────────────────┼────────────┼─────────────┤                                                                                        
+  │ Quota Enforcement │ ✅         │ ❌          │                                                                                        
+  ├───────────────────┼────────────┼─────────────┤                                                                                        
+  │ Request Logging   │ ✅         │ ❌          │                                                                                        
+  └───────────────────┴────────────┴─────────────┘                                                                                        
+  vLLM is intentionally internal-only — all external access goes through MaintServe for security and monitoring.  
