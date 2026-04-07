@@ -6,9 +6,13 @@ Compatible with OpenAI SDK since MaintServe exposes OpenAI-compatible endpoints.
 """
 
 import base64
+import os
 from pathlib import Path
 
 import httpx
+
+# Change this or set DEFAULT_MODEL env var to switch models globally
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "qwen2-vl:2b")
 
 
 class MaintServeClient:
@@ -52,7 +56,7 @@ class MaintServeClient:
     def chat(
         self,
         messages: list[dict],
-        model: str = "Qwen/Qwen3-VL-8B-Instruct",
+        model: str = DEFAULT_MODEL,
         max_tokens: int = 2048,
         temperature: float = 0.7,
         **kwargs,

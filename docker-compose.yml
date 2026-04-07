@@ -7,7 +7,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://maintserve:maintserve@postgres:5432/maintserve
       - REDIS_URL=redis://redis:6379/0
-      - VLLM_BASE_URL=http://host.docker.internal:8001
+      - VLLM_BASE_URL=http://69.19.136.124:8001
+      - DEFAULT_MODEL=Qwen/Qwen3-VL-8B-Instruct
       - DEBUG=false
     depends_on:
       postgres:
@@ -27,7 +28,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://maintserve:maintserve@postgres:5432/maintserve
       - REDIS_URL=redis://redis:6379/0
-      - VLLM_BASE_URL=http://host.docker.internal:8001
+      - VLLM_BASE_URL=http://69.19.136.124:8001
+      - DEFAULT_MODEL=Qwen/Qwen3-VL-8B-Instruct
     depends_on:
       - redis
       - postgres
@@ -37,7 +39,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:
-      replicas: 2  # Run 2 workers by default
+      replicas: 2 # Run 2 workers by default
 
   # PostgreSQL Database
   postgres:
@@ -51,7 +53,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U maintserve"]
+      test: [ "CMD-SHELL", "pg_isready -U maintserve" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -67,7 +69,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -114,6 +116,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+
 
 networks:
   maintserve-net:

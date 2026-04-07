@@ -43,7 +43,28 @@ class VLLMClient:
 
         # Convert to dict for vLLM
         payload = request.model_dump(exclude_none=True)
+        
+        # If 'options' exists, merge it into the root for Ollama/vLLM compatibility
+        if "options" in payload and isinstance(payload["options"], dict):
+            options = payload.pop("options")
+            payload.update(options)
 
+        # Ollama/vLLM vision fix: ensure images are in a top-level 'images' list
+        if "images" not in payload:
+            images = []
+            for msg in payload.get("messages", []):
+                content = msg.get("content")
+                if isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "image_url":
+                            img_url = part.get("image_url", {}).get("url", "")
+                            if img_url:
+                                images.append(img_url)
+            if images:
+                payload["images"] = images
+
+        logger.info("Sending request to vLLM", payload_keys=list(payload.keys()), num_images=len(payload.get("images", [])))
+        
         start_time = time.perf_counter()
 
         try:
@@ -54,6 +75,10 @@ class VLLMClient:
             response.raise_for_status()
 
             latency_ms = (time.perf_counter() - start_time) * 1000
+            
+            raw_text = response.text
+            logger.info("Received response from vLLM", status_code=response.status_code, text=raw_text[:200])
+            
             data = response.json()
 
             return ChatCompletionResponse(**data), latency_ms
@@ -77,6 +102,11 @@ class VLLMClient:
 
         payload = request.model_dump(exclude_none=True)
         payload["stream"] = True
+        
+        # If 'options' exists, merge it into the root for Ollama/vLLM compatibility
+        if "options" in payload and isinstance(payload["options"], dict):
+            options = payload.pop("options")
+            payload.update(options)
 
         async with client.stream(
             "POST",

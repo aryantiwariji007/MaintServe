@@ -2,6 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+
 
 class ImageUrl(BaseModel):
     url: str  # Can be URL or base64 data URI
@@ -19,7 +21,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "Qwen/Qwen3-VL-8B-Instruct"
+    model: str = settings.default_model
     messages: list[ChatMessage]
     max_tokens: int | None = Field(default=2048, ge=1, le=16384)
     temperature: float | None = Field(default=0.7, ge=0, le=2)
@@ -27,9 +29,10 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     stop: list[str] | None = None
 
-    # Additional vLLM params
+    # Additional vLLM/Ollama params
     presence_penalty: float | None = Field(default=0, ge=-2, le=2)
     frequency_penalty: float | None = Field(default=0, ge=-2, le=2)
+    options: dict[str, Any] | None = Field(default=None, description="Backend specific options like num_ctx")
 
 
 class Usage(BaseModel):
