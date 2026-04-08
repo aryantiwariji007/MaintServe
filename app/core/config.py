@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     # vLLM Backend
     vllm_base_url: str = "http://localhost:8001"
     vllm_timeout: float = 300.0  # 5 minutes for long generations
-    default_model: str = "qwen2-vl:2b"
+    vllm_max_concurrency: int = 10  # Max simultaneous calls to backend
+    default_model: str = "Qwen/Qwen3-VL-8B-Instruct"
 
     # Database
     database_url: str = "postgresql+asyncpg://maintserve:maintserve@localhost:5432/maintserve"

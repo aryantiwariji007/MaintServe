@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 import structlog
@@ -7,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import api_router
 from app.core.config import settings
 from app.core.metrics import MetricsMiddleware, metrics_endpoint
+from app.services.job_queue import refresh_queue_metrics
 from app.services.rate_limiter import rate_limiter
 from app.services.vllm_client import vllm_client
 
@@ -32,6 +34,16 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
+async def _queue_metrics_loop():
+    """Background task: refresh queue-depth gauges every 15 seconds."""
+    while True:
+        try:
+            refresh_queue_metrics()
+        except Exception:
+            pass  # Never crash the app over a metrics refresh
+        await asyncio.sleep(15)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -44,9 +56,13 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("vLLM backend not available", health=health)
 
+    # Start background queue-metrics refresh
+    queue_task = asyncio.create_task(_queue_metrics_loop())
+
     yield
 
     # Shutdown: cleanup
+    queue_task.cancel()
     logger.info("Shutting down MaintServe")
     await vllm_client.close()
     await rate_limiter.close()

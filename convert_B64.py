@@ -1,8 +1,8 @@
 import base64
+import sys
 
 def image_to_base64(image_path: str) -> str:
     """Convert image file to base64 data URL."""
-    # Detect MIME type
     ext = image_path.lower().split('.')[-1]
     mime_types = {
         'jpg': 'image/jpeg',
@@ -18,5 +18,8 @@ def image_to_base64(image_path: str) -> str:
 
     return f"data:{mime};base64,{b64}"
 
-# Usage
-data_url = image_to_base64("photo.jpg")
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python convert_B64.py <image_path>")
+        sys.exit(1)
+    print(image_to_base64(sys.argv[1]))

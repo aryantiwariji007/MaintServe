@@ -24,7 +24,7 @@ services:
   # RQ Worker for async jobs
   worker:
     build: .
-    command: rq worker inference high --url redis://redis:6379/0
+    command: rq worker high inference --url redis://redis:6379/0
     environment:
       - DATABASE_URL=postgresql+asyncpg://maintserve:maintserve@postgres:5432/maintserve
       - REDIS_URL=redis://redis:6379/0

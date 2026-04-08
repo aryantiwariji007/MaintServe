@@ -26,6 +26,13 @@ def process_inference(request_data: dict) -> dict:
     # Prepare the request to vLLM
     vllm_url = f"{settings.vllm_base_url}/v1/chat/completions"
 
+    # Remove MaintServe internal fields that vLLM doesn't understand
+    request_data.pop("priority", None)
+    # Remove internal metadata added during enqueuing
+    for key in list(request_data.keys()):
+        if key.startswith("_"):
+            request_data.pop(key)
+
     # Make synchronous request to vLLM
     with httpx.Client(timeout=settings.vllm_timeout) as client:
         if job:

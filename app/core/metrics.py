@@ -1,10 +1,15 @@
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+import uuid
+
+import structlog
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi import Request, Response
-from fastapi.routing import APIRoute
 from starlette.middleware.base import BaseHTTPMiddleware
 import time
 
-# Metrics
+logger = structlog.get_logger()
+
+# --- Existing metrics ---
+
 REQUEST_COUNT = Counter(
     "maintserve_requests_total",
     "Total number of requests",
@@ -34,14 +39,68 @@ VLLM_HEALTH = Gauge(
     "vLLM backend health status (1=healthy, 0=unhealthy)",
 )
 
+VLLM_CONCURRENCY_WAITING = Gauge(
+    "maintserve_vllm_waiting_requests",
+    "Number of requests waiting for a vLLM processing slot",
+)
+
+# --- Team-level usage metrics (high-level, not per-call) ---
+
+TEAM_REQUESTS = Counter(
+    "maintserve_team_requests_total",
+    "Total requests by team",
+    ["team", "status_code"],
+)
+
+TEAM_TOKENS = Counter(
+    "maintserve_team_tokens_total",
+    "Total tokens by team and type",
+    ["team", "type"],  # type: prompt, completion
+)
+
+# --- Queue / load management metrics ---
+
+QUEUE_DEPTH = Gauge(
+    "maintserve_queue_depth",
+    "Current job count in each queue by state",
+    ["queue", "state"],  # queue: normal|urgent, state: queued|started|failed
+)
+
+JOBS_ENQUEUED = Counter(
+    "maintserve_jobs_enqueued_total",
+    "Total async jobs submitted by priority",
+    ["priority"],  # normal, urgent
+)
+
+
+# --- Helper functions ---
+
+def record_team_usage(team: str, prompt_tokens: int, completion_tokens: int, status_code: int):
+    """Record team-level token and request metrics. Call after a completed inference."""
+    label = team or "unknown"
+    TEAM_REQUESTS.labels(team=label, status_code=str(status_code)).inc()
+    TEAM_TOKENS.labels(team=label, type="prompt").inc(prompt_tokens)
+    TEAM_TOKENS.labels(team=label, type="completion").inc(completion_tokens)
+
+
+def record_tokens(prompt_tokens: int, completion_tokens: int):
+    """Record token usage in global (non-team) metrics."""
+    TOKENS_TOTAL.labels(type="prompt").inc(prompt_tokens)
+    TOKENS_TOTAL.labels(type="completion").inc(completion_tokens)
+
+
+# --- Middleware ---
 
 class MetricsMiddleware(BaseHTTPMiddleware):
-    """Middleware to collect request metrics."""
+    """Middleware to collect request metrics and propagate trace IDs."""
 
     async def dispatch(self, request: Request, call_next):
-        # Skip metrics endpoint to avoid recursion
         if request.url.path == "/metrics":
             return await call_next(request)
+
+        # Generate a trace ID for every request and attach to request state
+        trace_id = str(uuid.uuid4())
+        request.state.trace_id = trace_id
 
         ACTIVE_REQUESTS.inc()
         start_time = time.perf_counter()
@@ -49,7 +108,6 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
 
-            # Record metrics
             duration = time.perf_counter() - start_time
             endpoint = self._get_endpoint(request)
 
@@ -64,23 +122,27 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                 endpoint=endpoint,
             ).observe(duration)
 
+            # Surface trace ID on every response so callers can correlate logs
+            response.headers["X-Trace-ID"] = trace_id
+
+            logger.info(
+                "request_completed",
+                trace_id=trace_id,
+                method=request.method,
+                endpoint=endpoint,
+                status_code=response.status_code,
+                duration_ms=round(duration * 1000, 2),
+            )
+
             return response
 
         finally:
             ACTIVE_REQUESTS.dec()
 
     def _get_endpoint(self, request: Request) -> str:
-        """Get a normalized endpoint path for metrics."""
-        # Use route path if available, otherwise use the actual path
         if request.scope.get("route"):
             return request.scope["route"].path
         return request.url.path
-
-
-def record_tokens(prompt_tokens: int, completion_tokens: int):
-    """Record token usage in metrics."""
-    TOKENS_TOTAL.labels(type="prompt").inc(prompt_tokens)
-    TOKENS_TOTAL.labels(type="completion").inc(completion_tokens)
 
 
 async def metrics_endpoint():

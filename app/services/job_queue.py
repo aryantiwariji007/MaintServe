@@ -3,6 +3,7 @@ from rq import Queue
 from rq.job import Job
 
 from app.core.config import settings
+from app.core.metrics import JOBS_ENQUEUED, QUEUE_DEPTH
 
 # Redis connection for RQ
 redis_conn = redis.from_url(settings.redis_url)
@@ -15,6 +16,7 @@ high_priority_queue = Queue("high", connection=redis_conn, default_timeout=300)
 def enqueue_inference_job(request_data: dict, high_priority: bool = False) -> str:
     """Enqueue an inference job and return the job ID."""
     queue = high_priority_queue if high_priority else inference_queue
+    priority_label = "urgent" if high_priority else "normal"
 
     job = queue.enqueue(
         "app.workers.inference_worker.process_inference",
@@ -23,7 +25,17 @@ def enqueue_inference_job(request_data: dict, high_priority: bool = False) -> st
         result_ttl=3600,  # Keep result for 1 hour
         failure_ttl=86400,  # Keep failed jobs for 24 hours
     )
+
+    JOBS_ENQUEUED.labels(priority=priority_label).inc()
     return job.id
+
+
+def refresh_queue_metrics():
+    """Sync queue depth gauges to Prometheus. Called by a background task."""
+    for queue, label in [(inference_queue, "normal"), (high_priority_queue, "urgent")]:
+        QUEUE_DEPTH.labels(queue=label, state="queued").set(len(queue))
+        QUEUE_DEPTH.labels(queue=label, state="started").set(queue.started_job_registry.count)
+        QUEUE_DEPTH.labels(queue=label, state="failed").set(queue.failed_job_registry.count)
 
 
 def get_job(job_id: str) -> Job | None:

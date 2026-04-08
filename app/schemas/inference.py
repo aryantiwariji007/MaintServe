@@ -28,6 +28,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: float | None = Field(default=1.0, ge=0, le=1)
     stream: bool = False
     stop: list[str] | None = None
+    priority: str = Field(default="normal", description="Request priority: 'normal' or 'urgent'")
 
     # Additional vLLM/Ollama params
     presence_penalty: float | None = Field(default=0, ge=-2, le=2)

@@ -203,10 +203,33 @@ Available at http://localhost:8000/metrics:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VLLM_BASE_URL` | `http://localhost:8001` | vLLM server URL |
+| `VLLM_MAX_CONCURRENCY` | `10` | Max simultaneous calls to vLLM |
 | `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL connection |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
 | `RATE_LIMIT_REQUESTS` | `100` | Requests per window |
 | `RATE_LIMIT_WINDOW` | `60` | Window in seconds |
+
+## Load Management & Priority
+
+MaintServe provides robust load management to protect the vLLM backend:
+
+1. **Concurrency Control**: Both synchronous and asynchronous requests are subject to `VLLM_MAX_CONCURRENCY`. If the limit is reached, requests wait in an internal queue.
+2. **Priority Queuing**: Async jobs can be marked as `urgent` to move to the front of the background processing queue.
+3. **Queue Monitoring**: Use `GET /api/v1/queue/stats` or the Prometheus metrics to monitor queue depth and waiting requests.
+
+### Specifying Priority
+
+Add the `priority` field to your request body:
+
+```json
+{
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "messages": [...],
+  "priority": "urgent"
+}
+```
+
+*Note: For synchronous requests, priority currently shares the same concurrency pool but ensures they are handled before lower priority background tasks.*
   # Run migrations                                                                                                                        
   docker compose exec api alembic upgrade head                                                                                            
                                                                                                                                           
