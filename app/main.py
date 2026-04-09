@@ -44,6 +44,16 @@ async def _queue_metrics_loop():
         await asyncio.sleep(15)
 
 
+async def _vllm_health_loop():
+    """Background task: poll vLLM health every 15 seconds to keep metric fresh."""
+    while True:
+        try:
+            await vllm_client.health_check()
+        except Exception:
+            pass
+        await asyncio.sleep(15)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -58,11 +68,13 @@ async def lifespan(app: FastAPI):
 
     # Start background queue-metrics refresh
     queue_task = asyncio.create_task(_queue_metrics_loop())
+    vllm_health_task = asyncio.create_task(_vllm_health_loop())
 
     yield
 
     # Shutdown: cleanup
     queue_task.cancel()
+    vllm_health_task.cancel()
     logger.info("Shutting down MaintServe")
     await vllm_client.close()
     await rate_limiter.close()

@@ -8,7 +8,7 @@ import structlog
 
 from app.core.config import settings
 from app.schemas.inference import ChatCompletionRequest, ChatCompletionResponse
-from app.core.metrics import VLLM_CONCURRENCY_WAITING
+from app.core.metrics import VLLM_CONCURRENCY_WAITING, VLLM_HEALTH
 
 logger = structlog.get_logger()
 
@@ -154,8 +154,10 @@ class VLLMClient:
         client = await self.get_client()
         try:
             response = await client.get("/health")
+            VLLM_HEALTH.set(1)
             return {"status": "healthy", "vllm_status": response.status_code}
         except Exception as e:
+            VLLM_HEALTH.set(0)
             return {"status": "unhealthy", "error": str(e)}
 
     async def get_models(self) -> list[dict[str, Any]]:

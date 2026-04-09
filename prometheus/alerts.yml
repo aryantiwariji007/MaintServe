@@ -1,0 +1,32 @@
+groups:
+  - name: maintserve
+    rules:
+      - alert: vLLMDown
+        expr: maintserve_vllm_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+
+      - alert: HighFailedJobs
+        expr: sum(maintserve_queue_depth{state="failed"}) > 10
+        for: 2m
+        labels:
+          severity: warning
+
+      - alert: QueueBacklog
+        expr: sum(maintserve_queue_depth{state="queued"}) > 50
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: HighErrorRate
+        expr: sum(rate(maintserve_requests_total{status_code=~"5.."}[5m])) / sum(rate(maintserve_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(maintserve_request_latency_seconds_bucket[5m])) > 60
+        for: 3m
+        labels:
+          severity: warning
