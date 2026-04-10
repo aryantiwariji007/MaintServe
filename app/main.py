@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import api_router
 from app.core.config import settings
 from app.core.metrics import MetricsMiddleware, metrics_endpoint
-from app.services.job_queue import refresh_queue_metrics
+from app.services.job_queue import refresh_queue_metrics, get_queue_stats
 from app.services.rate_limiter import rate_limiter
 from app.services.vllm_client import vllm_client
 
@@ -103,6 +103,30 @@ if settings.enable_metrics:
 
 # Include API routes
 app.include_router(api_router, prefix=settings.api_prefix)
+
+
+@app.get("/status")
+async def status():
+    """Live test status — queue depth + vLLM health. No auth required."""
+    queue = get_queue_stats()
+    normal = queue["inference"]
+    urgent = queue["high_priority"]
+    total_queued   = normal["queued"]   + urgent["queued"]
+    total_started  = normal["started"]  + urgent["started"]
+    total_finished = normal["finished"] + urgent["finished"]
+    total_failed   = normal["failed"]   + urgent["failed"]
+    total_submitted = total_queued + total_started + total_finished + total_failed
+    done_pct = round(total_finished / total_submitted * 100, 1) if total_submitted else 0
+    vllm_ok = (await vllm_client.health_check()).get("status") == "healthy"
+    return {
+        "vllm": "healthy" if vllm_ok else "DOWN",
+        "progress": f"{total_finished}/{total_submitted} ({done_pct}%)",
+        "queued": total_queued,
+        "processing": total_started,
+        "finished": total_finished,
+        "failed": total_failed,
+        "by_queue": queue,
+    }
 
 
 @app.get("/")

@@ -13,14 +13,14 @@ ADMIN_API_KEY = "ms_admin_default_key_change_me"
 # Model
 MODEL = "Qwen/Qwen3-VL-8B-Instruct"
 
-# Rate limiting (matches server: 100 req / 60s window)
-RATE_LIMIT_REQUESTS = 100
+# Rate limiting (matches server: 2000 req / 60s window)
+RATE_LIMIT_REQUESTS = 2000
 RATE_LIMIT_WINDOW = 60
-SUBMIT_RATE = 80  # stay safely below server limit
+SUBMIT_RATE = 500  # per-script submit rate; two parallel scripts = 1000 combined (well under 2000)
 
 # Timeouts
 SYNC_TIMEOUT = 120       # seconds for sync /chat/completions
-POLL_TIMEOUT = 600       # seconds to wait for async job completion
+POLL_TIMEOUT = 7200      # seconds to wait for async job completion (2h for large parallel runs)
 POLL_INTERVAL = 3        # seconds between poll cycles
 
 # vLLM concurrency (matches server vllm_max_concurrency)

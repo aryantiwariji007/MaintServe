@@ -21,7 +21,7 @@ def enqueue_inference_job(request_data: dict, high_priority: bool = False) -> st
     job = queue.enqueue(
         "app.workers.inference_worker.process_inference",
         request_data,
-        job_timeout=600,
+        job_timeout=700,
         result_ttl=3600,  # Keep result for 1 hour
         failure_ttl=86400,  # Keep failed jobs for 24 hours
     )
