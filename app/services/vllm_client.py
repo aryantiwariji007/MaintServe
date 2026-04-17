@@ -153,7 +153,8 @@ class VLLMClient:
         """Check vLLM server health."""
         client = await self.get_client()
         try:
-            response = await client.get("/health")
+            # Use /v1/models as a health check since it's more reliable than /health
+            response = await client.get("/v1/models", timeout=5.0)
             VLLM_HEALTH.set(1)
             return {"status": "healthy", "vllm_status": response.status_code}
         except Exception as e:

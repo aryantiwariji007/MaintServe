@@ -1,12 +1,19 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class APIKeyCreate(BaseModel):
     name: str
     description: str | None = None
     expires_at: datetime | None = None
+
+    @field_validator("expires_at", mode="after")
+    @classmethod
+    def strip_timezone(cls, v):
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class APIKeyUpdate(BaseModel):
